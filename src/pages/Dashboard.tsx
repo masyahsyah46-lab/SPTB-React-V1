@@ -46,29 +46,32 @@ ChartJS.register(
   Legend
 );
 
-// PENTING: Custom breathing plugin from original app.js
+// PENTING: Custom breathing plugin (Alive Plugin)
 const alivePlugin: Plugin = {
   id: 'alive',
   beforeDraw: (chart) => {
     // @ts-ignore - access custom option
     if (chart.options.plugins?.alive?.enabled) {
-      const timestamp = Date.now();
-      const scale = 1 + Math.sin(timestamp / 1000) * 0.01;
-      const ctx = chart.ctx;
+      const { ctx, chartArea, width, height } = chart;
+      const centerX = (chartArea.left + chartArea.right) / 2 || width / 2;
+      const centerY = (chartArea.top + chartArea.bottom) / 2 || height / 2;
+      
+      // Breathing Scale: Math.sin(Date.now() / 1000) * 0.01 (range 0.99 to 1.01)
+      const scale = 1 + Math.sin(Date.now() / 1000) * 0.01;
+      
       ctx.save();
-      ctx.translate(chart.width / 2, chart.height / 2);
+      ctx.translate(centerX, centerY);
       ctx.scale(scale, scale);
-      ctx.translate(-chart.width / 2, -chart.height / 2);
+      ctx.translate(-centerX, -centerY);
     }
   },
   afterDraw: (chart) => {
-    // @ts-ignore - access custom option
+    // @ts-ignore
     if (chart.options.plugins?.alive?.enabled) {
       chart.ctx.restore();
     }
   }
 };
-
 ChartJS.register(alivePlugin);
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
@@ -77,11 +80,23 @@ export const Dashboard: React.FC = () => {
   const { currentUser } = useAuth();
   const { dashboardData, cachedData, refreshData, setActiveTab } = useAppContext();
   const [loading, setLoading] = useState(false);
+  const [ticker, setTicker] = useState(0);
   const [filter, setFilter] = useState({
     period: 'monthly',
     year: new Date().getFullYear(),
     month: new Date().getMonth() + 1
   });
+
+  // Request animation frame for breathing effect in charts
+  useEffect(() => {
+    let frame: number;
+    const loop = () => {
+      setTicker(t => t + 1);
+      frame = requestAnimationFrame(loop);
+    };
+    frame = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(frame);
+  }, []);
 
   const handleRefresh = async () => {
     setLoading(true);
@@ -104,12 +119,16 @@ export const Dashboard: React.FC = () => {
       total: filtered.length,
       lulus: filtered.filter(i => (i.kelulusan || '').includes('LULUS') || (i.kelulusan || '').includes('SOKONG')).length,
       tolak: filtered.filter(i => (i.kelulusan || '').includes('TOLAK') || (i.kelulusan || '').includes('SIASAT') || (i.kelulusan || '').includes('TIDAK DISOKONG')).length,
-      proses: filtered.filter(i => !(i.kelulusan || '').includes('LULUS') && !(i.kelulusan || '').includes('SOKONG') && !(i.kelulusan || '').includes('TOLAK') && !(i.kelulusan || '').includes('SIASAT') && !(i.kelulusan || '').includes('TIDAK DISOKONG')).length,
+      proses: filtered.filter(i => {
+          const k = (i.kelulusan || '').toUpperCase();
+          const hasSyor = i.borang_syor_pengesyor || i.db_syor_pengesyor;
+          return !k.includes('LULUS') && !k.includes('SOKONG') && !k.includes('TOLAK') && !k.includes('SIASAT') && !hasSyor;
+      }).length,
       typeStats: filtered.reduce((acc: any, item) => {
-        const type = (item.jenis || 'baru').toUpperCase();
+        const type = (item.jenis || 'BARU').toUpperCase();
         acc[type] = (acc[type] || 0) + 1;
         return acc;
-      }, {}),
+      }, { 'BARU': 0, 'PEMBAHARUAN': 0, 'UBAH MAKLUMAT': 0, 'UBAH GRED': 0 }),
       consultationStats: filtered.reduce((acc: any, item) => {
         const platform = (item.db_konsultansi_platform || 'EMEL').toUpperCase();
         acc[platform] = (acc[platform] || 0) + 1;
@@ -160,13 +179,12 @@ export const Dashboard: React.FC = () => {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
-      legend: { position: 'bottom' as const },
+      legend: { position: 'bottom' as const, labels: { font: { weight: 'bold', size: 10 } } },
       // @ts-ignore
       alive: { enabled: true }
     },
     animation: {
-      duration: 2000,
-      easing: 'easeOutElastic'
+      duration: 0
     }
   };
 

@@ -128,13 +128,30 @@ export const ProfileSyarikat: React.FC = () => {
                 <AnimatePresence mode="wait">
                     {activeSubTab === 'umum' && (
                         <motion.div key="umum" initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-10}} className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                            <Card title="ALAMAT & HUBUNGAN">
-                                <div className="space-y-6">
-                                    <textarea className="form-input bg-slate-50 border-slate-100 h-32 resize-none pt-3 font-bold uppercase" placeholder="Alamat Perniagaan..." defaultValue={profile.address} />
-                                    <input className="form-input bg-slate-50 border-slate-100 font-bold" placeholder="No Telefon..." defaultValue={profile.phone} />
-                                    <input className="form-input bg-slate-50 border-slate-100 font-bold" placeholder="Emel Syarikat..." />
-                                </div>
-                            </Card>
+            <Card title="ALAMAT & HUBUNGAN">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="space-y-6">
+                        <textarea className="form-input bg-slate-50 border-slate-100 h-32 resize-none pt-3 font-bold uppercase" placeholder="Alamat Perniagaan..." defaultValue={profile.address} />
+                        <input className="form-input bg-slate-50 border-slate-100 font-bold" placeholder="No Telefon..." defaultValue={profile.phone} />
+                        <input className="form-input bg-slate-50 border-slate-100 font-bold" placeholder="Emel Syarikat..." />
+                    </div>
+                    <div className="flex flex-col items-center justify-center p-6 bg-slate-50 rounded-[2rem] border border-slate-100">
+                        <p className="text-[10px] font-black text-slate-400 mb-4 uppercase tracking-[0.2em]">Pautan Drive (QR)</p>
+                        <div className="w-40 h-40 bg-white p-2 rounded-2xl shadow-inner flex items-center justify-center">
+                            <img 
+                                src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(profile.driveLink || 'https://cidb.gov.my')}`} 
+                                alt="QR Code" 
+                                className="w-full h-full object-contain"
+                            />
+                        </div>
+                        <input 
+                            className="mt-4 form-input text-[10px] h-8 bg-white border-slate-200" 
+                            placeholder="Pautan Google Drive..." 
+                            onChange={(e) => setProfile({...profile, driveLink: e.target.value})}
+                        />
+                    </div>
+                </div>
+            </Card>
                             <Card title="MAKLUMAT PENDAFTARAN">
                                 <div className="space-y-6">
                                     <input className="form-input bg-slate-50 border-slate-100 font-bold uppercase" placeholder="No Pendaftaran (SSM)..." />

@@ -12,7 +12,8 @@ import {
   MoreVertical,
   Inbox,
   Send,
-  FileText
+  FileText,
+  Zap
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAppContext } from '../context/AppContext';
@@ -54,11 +55,11 @@ export const Senarai: React.FC = () => {
       const pengesyor = item.nama_pengesyor || '';
       
       if (activeSubTab === 'draft') {
-        matchTab = (status === '' || status === 'DRAFT') && pengesyor === currentUser?.name;
+        matchTab = (!item.tarikh_syor || item.tarikh_syor === '') && (pengesyor === currentUser?.name || item.pengesyor === currentUser?.name);
       } else if (activeSubTab === 'submitted') {
-        matchTab = status.includes('DISYOR') && pengesyor === currentUser?.name;
+        matchTab = (item.tarikh_syor && item.tarikh_syor !== '') && (pengesyor === currentUser?.name || item.pengesyor === currentUser?.name);
       } else if (activeSubTab === 'inbox') {
-        matchTab = status.includes('DISYOR') && (currentUser?.role === 'PELULUS' || currentUser?.role === 'SUPER_ADMIN');
+        matchTab = (item.tarikh_syor && item.tarikh_syor !== '') && (currentUser?.role === 'PELULUS' || currentUser?.role === 'SUPER_ADMIN');
       }
 
       if (!matchTab) return false;
@@ -85,19 +86,20 @@ export const Senarai: React.FC = () => {
   }, [cachedData, activeSubTab, currentFilter, debouncedQuery, currentUser]);
 
   const getStatusBadge = (item: any) => {
-    const status = item.kelulusan || 'DRAFT';
-    const type = item.jenis?.toUpperCase() || '';
+    const status = (item.kelulusan || '').toUpperCase();
     
-    if (status.includes('LULUS')) return <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-[10px] font-black uppercase">LULUS</span>;
-    if (status.includes('TOLAK')) return <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-[10px] font-black uppercase">TOLAK</span>;
-    if (status.includes('SIASAT')) return <span className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-[10px] font-black uppercase">SIASAT</span>;
-    if (status.includes('DISYOR')) return <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-[10px] font-black uppercase">DISYOR</span>;
+    if (status.includes('LULUS') || status.includes('SOKONG')) return <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-[10px] font-black uppercase">LULUS</span>;
+    if (status.includes('TOLAK') || status.includes('SIASAT')) return <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-[10px] font-black uppercase">TOLAK/SIASAT</span>;
+    if (item.tarikh_syor && item.tarikh_syor !== '') return <span className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter">PENDING PELULUS</span>;
     
     return <span className="bg-slate-100 text-slate-400 px-3 py-1 rounded-full text-[10px] font-black uppercase">DRAFT</span>;
   };
 
   const getTypeBadge = (item: any) => {
     const type = item.jenis?.toUpperCase() || '';
+    const isSpecial = item.segera === 'YA' || item.db_kelulusan_spi === 'YA';
+    
+    if (isSpecial) return <span className="bg-blue-600 text-white px-2 py-0.5 rounded text-[9px] font-black flex items-center gap-1 shadow-sm"><Zap size={8} fill="currentColor" /> SPI</span>;
     if (type === 'BARU') return <span className="bg-blue-500 text-white px-2 py-0.5 rounded text-[9px] font-black">BARU</span>;
     if (type.includes('PEMBAHARUAN')) return <span className="bg-emerald-500 text-white px-2 py-0.5 rounded text-[9px] font-black">PEMBAHARUAN</span>;
     return <span className="bg-slate-500 text-white px-2 py-0.5 rounded text-[9px] font-black">{type}</span>;
@@ -118,13 +120,32 @@ export const Senarai: React.FC = () => {
     }
   };
 
+  const handleUndo = async (row: number) => {
+    if (window.confirm("Tarik balik permohonan ini? Rekod akan kembali ke folder Draf.")) {
+      setLoading(true);
+      try {
+        await apiService.saveRecord({
+            row,
+            action: 'undo_syor',
+            pengesyor: currentUser?.name
+        });
+        playSoundEffect('minimal alert.mp3');
+        await refreshData();
+      } catch (e) {
+        alert("Ralat tarik balik permohonan.");
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
   const handleAction = (item: any) => {
     setSelectedRecord(item);
     playSoundEffect('ui_click.mp3');
     if (activeSubTab === 'inbox') {
       setActiveTab('keputusan');
     } else if (activeSubTab === 'draft') {
-      setActiveTab('borang');
+      setActiveTab('database'); // Jump to InputDatabase for editing
     } else {
       setActiveTab('paparan');
     }
@@ -133,12 +154,12 @@ export const Senarai: React.FC = () => {
   const counts = useMemo(() => {
     const res = { draft: 0, submitted: 0, inbox: 0, baru: 0 };
     cachedData.forEach(item => {
-      const status = item.kelulusan || '';
-      const pengesyor = item.nama_pengesyor || '';
+      const pengesyor = item.nama_pengesyor || item.pengesyor || '';
+      const hasSyor = item.tarikh_syor && item.tarikh_syor !== '';
       
-      if ((status === '' || status === 'DRAFT') && pengesyor === currentUser?.name) res.draft++;
-      if (status.includes('DISYOR') && pengesyor === currentUser?.name) res.submitted++;
-      if (status.includes('DISYOR') && (currentUser?.role === 'PELULUS' || currentUser?.role === 'SUPER_ADMIN')) res.inbox++;
+      if (!hasSyor && pengesyor === currentUser?.name) res.draft++;
+      if (hasSyor && pengesyor === currentUser?.name) res.submitted++;
+      if (hasSyor && (currentUser?.role === 'PELULUS' || currentUser?.role === 'SUPER_ADMIN')) res.inbox++;
       if (item.jenis?.toUpperCase() === 'BARU') res.baru++;
     });
     return res;
@@ -273,18 +294,29 @@ export const Senarai: React.FC = () => {
                         className={cn(
                             "w-full py-4 rounded-2xl flex items-center justify-center gap-2 font-black uppercase tracking-widest text-xs transition-all active:scale-95 shadow-lg",
                             activeSubTab === 'inbox' 
-                                ? "bg-slate-800 text-white shadow-slate-200 hover:bg-slate-900" 
-                                : "bg-blue-600 text-white shadow-blue-200 hover:bg-blue-700"
+                              ? "bg-slate-800 text-white shadow-slate-200 hover:bg-slate-900" 
+                              : "bg-blue-600 text-white shadow-blue-200 hover:bg-blue-700",
+                            activeSubTab === 'submitted' && "bg-orange-500 hover:bg-orange-600 shadow-orange-200"
                         )}
                     >
                         {activeSubTab === 'inbox' ? (
                             <>SEMAK & LULUS <ArrowRight size={16} /></>
                         ) : activeSubTab === 'draft' ? (
-                            <>EDIT PERMOHONAN <Edit3 size={16} /></>
+                            <>SUNTING DRAF <Edit3 size={16} /></>
+                        ) : activeSubTab === 'submitted' ? (
+                            <>LIHAT BORANG <Eye size={16} /></>
                         ) : (
                             <>LIHAT BUTIRAN <Eye size={16} /></>
                         )}
                     </button>
+                    {activeSubTab === 'submitted' && (
+                        <button 
+                            onClick={() => handleUndo(item.row)}
+                            className="mt-2 w-full py-3 bg-amber-50 text-amber-600 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-amber-100 transition-all border border-amber-200"
+                        >
+                            UNDO PENYORAN (BALIK KE DRAF)
+                        </button>
+                    )}
                     
                     {/* Decorative element */}
                     <div className="absolute -bottom-4 -right-4 w-24 h-24 bg-slate-50 rounded-full scale-0 group-hover:scale-100 transition-transform duration-700 -z-0 opacity-50" />

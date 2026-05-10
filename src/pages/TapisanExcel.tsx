@@ -63,7 +63,7 @@ export const TapisanExcel: React.FC = () => {
     };
 
     const keys = {
-      company: findHeader([/syarikat/i, /company/i, /nama/i]),
+      company: findHeader([/syarikat/i, /company/i, /nama.*syarikat/i]),
       grade: findHeader([/gred/i, /grade/i]),
       cidb: findHeader([/cidb/i, /reg/i, /no.*pendaftaran/i]),
       district: findHeader([/daerah/i, /district/i, /negeri/i, /kawasan/i]),
@@ -72,18 +72,17 @@ export const TapisanExcel: React.FC = () => {
     };
 
     const gradeRegex = /^G[4-7]/i;
-    const items: ExcelItem[] = data.slice(1).filter(row => {
-      const g = String(row[keys.grade] || '').trim();
-      return gradeRegex.test(g);
-    }).map((row, idx) => {
+    const items: ExcelItem[] = data.slice(1).map((row, idx) => {
       let dateStr = '-';
       let sortDate = new Date(0);
+      
       if (row[keys.date]) {
         if (typeof row[keys.date] === 'number') {
+          // Excel Serial Date to JS Date
           sortDate = new Date(Math.round((row[keys.date] - 25569) * 86400 * 1000));
-          dateStr = sortDate.toLocaleDateString('en-GB');
+          dateStr = sortDate.toLocaleDateString('en-GB'); // DD/MM/YYYY
         } else {
-          dateStr = String(row[keys.date]);
+          dateStr = String(row[keys.date]).trim();
           const parts = dateStr.split('/');
           if(parts.length === 3) sortDate = new Date(parseInt(parts[2]), parseInt(parts[1])-1, parseInt(parts[0]));
         }
@@ -91,27 +90,37 @@ export const TapisanExcel: React.FC = () => {
 
       const company = String(row[keys.company] || '-').trim().toUpperCase();
       const cidb = String(row[keys.cidb] || '-').trim();
+      const grade = String(row[keys.grade] || '-').trim().toUpperCase();
       const lastDigit = cidb.slice(-1);
       const firstChar = company.charAt(0);
 
-      // Auto Tapis Logic: Based on CIDB Last Digit and First Character
-      // This is a representative rule - in a real app, these would come from the pengesyor's profile
+      // Auto Tapis Logic: Based on CIDB Last Digit and Alpha Split (A-M)
       let autoAssign = false;
+      const isCorrectGrade = gradeRegex.test(grade);
+
       if (currentUser?.role === 'PENGESYOR') {
-          const assignedDigits = currentUser.assignedDigits || []; // e.g. ['1', '2', '3']
-          const assignedChars = currentUser.assignedChars || []; // e.g. ['A', 'B', 'C']
+          const assignedDigits = currentUser.assignedDigits || [];
+          const assignedChars = currentUser.assignedChars || [];
           
+          // Layer 1: Digit logic
           if (assignedDigits.length > 0 && assignedDigits.includes(lastDigit)) autoAssign = true;
+          // Layer 2: Alpha split logic
           if (assignedChars.length > 0 && assignedChars.includes(firstChar)) autoAssign = true;
           
-          // Fallback simple rule if no specific assignments: assign even/odd based on some logic
+          // Fallback Default Split (A-M vs N-Z)
           if (assignedDigits.length === 0 && assignedChars.length === 0) {
               const codeNum = parseInt(currentUser.firebaseCode || '0') % 2;
               const digitNum = parseInt(lastDigit) % 2;
-              if (codeNum === digitNum) autoAssign = true;
+              // Simple split: Even users get even digits and A-M
+              const isAM = firstChar >= 'A' && firstChar <= 'M';
+              if (codeNum === 0) {
+                  autoAssign = (digitNum === 0 && isAM);
+              } else {
+                  autoAssign = (digitNum === 1 || !isAM);
+              }
           }
       } else {
-          autoAssign = true; // Admin/Superadmin see everything
+          autoAssign = true;
       }
 
       return {
@@ -119,13 +128,13 @@ export const TapisanExcel: React.FC = () => {
         company,
         cidb,
         district: keys.district !== -1 ? String(row[keys.district] || '-').trim().toUpperCase() : '-',
-        grade: String(row[keys.grade] || '-').trim().toUpperCase(),
+        grade,
         dateSubmitted: dateStr,
         rawSortDate: sortDate,
         updateType: keys.updateType !== -1 ? String(row[keys.updateType] || '-').trim() : '-',
-        isAutoAssigned: autoAssign
+        isAutoAssigned: autoAssign && isCorrectGrade
       };
-    });
+    }).filter(i => gradeRegex.test(i.grade));
 
     setRawData(items);
     const uniqueDistricts = Array.from(new Set(items.map(i => i.district))).filter(d => d !== '-').sort();

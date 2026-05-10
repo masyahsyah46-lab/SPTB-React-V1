@@ -38,14 +38,14 @@ export const BorangSemakan: React.FC = () => {
   
   // Form State
   const [form, setForm] = useState<any>({
-    jenisApp: '',
+    jenisApp: 'BARU',
     borang_syarikat: '',
     borang_cidb: '',
     borang_gred: '',
     borang_tarikh_mohon: '',
-    borang_tatatertib: '',
+    borang_tatatertib: 'TIADA',
     borang_justifikasi: '',
-    borang_no_telefon: '',
+    borang_tatatertib_details: '',
     spkkDuration: '',
     stbDuration: '',
     ssm_date_input: '',
@@ -65,9 +65,7 @@ export const BorangSemakan: React.FC = () => {
     borang_syor_pengesyor: ''
   });
 
-  const [personnel, setPersonnel] = useState<Person[]>([
-    { id: Date.now().toString(), name: '', isCompany: false, roles: [], s_ic: '', s_sb: '', s_epf: '' }
-  ]);
+  const [personnel, setPersonnel] = useState<Person[]>([]);
 
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState(0);
@@ -84,17 +82,21 @@ export const BorangSemakan: React.FC = () => {
 
   // Auto-fill from Bakul
   useEffect(() => {
-    if (selectedRecord && selectedRecord.fromBakul) {
+    if (selectedRecord && (selectedRecord.fromBakul || selectedRecord.cidb)) {
         setForm(prev => ({
             ...prev,
-            borang_syarikat: selectedRecord.syarikat || prev.borang_syarikat,
+            borang_syarikat: selectedRecord.syarikat || selectedRecord.company || prev.borang_syarikat,
             borang_cidb: selectedRecord.cidb || prev.borang_cidb,
             borang_gred: selectedRecord.gred || prev.borang_gred,
-            jenisApp: selectedRecord.jenis || prev.jenisApp,
-            borang_tarikh_mohon: selectedRecord.tarikh || prev.borang_tarikh_mohon,
-            district: selectedRecord.district || prev.district
+            jenisApp: selectedRecord.jenis || selectedRecord.type || prev.jenisApp,
+            borang_tarikh_mohon: selectedRecord.tarikh || selectedRecord.dateSubmitted || prev.borang_tarikh_mohon,
         }));
-        setSelectedRecord({ ...selectedRecord, fromBakul: false });
+        // Personnel sync
+        if (selectedRecord.personnel) setPersonnel(selectedRecord.personnel);
+        
+        if (selectedRecord.fromBakul) {
+            setSelectedRecord({ ...selectedRecord, fromBakul: false });
+        }
     }
   }, [selectedRecord, setSelectedRecord]);
 
@@ -103,7 +105,10 @@ export const BorangSemakan: React.FC = () => {
     const data = loadPersistedForm();
     if (data && data.fields) {
       if (data.fields.personnel) setPersonnel(data.fields.personnel);
-      setForm(data.fields);
+      setForm(prev => ({ ...prev, ...data.fields }));
+    } else {
+        // Initial empty person
+        setPersonnel([{ id: Date.now().toString(), name: '', isCompany: false, roles: ['PENGARAH'], s_ic: '', s_sb: '', s_epf: '' }]);
     }
   }, []);
 
@@ -114,7 +119,7 @@ export const BorangSemakan: React.FC = () => {
   // Handle Input Changes
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { id, value, type } = e.target as any;
-    const val = (e.target as any).checked !== undefined && type === 'checkbox' ? (e.target as any).checked : value;
+    const val = type === 'checkbox' ? (e.target as any).checked : value;
     setForm((prev: any) => ({ ...prev, [id]: val }));
   };
 
@@ -125,7 +130,7 @@ export const BorangSemakan: React.FC = () => {
 
   // Personnel Management
   const addPerson = () => {
-    setPersonnel([...personnel, { id: Date.now().toString(), name: '', isCompany: false, roles: [], s_ic: '', s_sb: '', s_epf: '' }]);
+    setPersonnel([...personnel, { id: Date.now().toString(), name: '', isCompany: false, roles: ['PENGARAH'], s_ic: '', s_sb: '', s_epf: '' }]);
     playSoundEffect('ui_click.mp3');
   };
 
@@ -149,11 +154,16 @@ export const BorangSemakan: React.FC = () => {
     
     try {
         setLoadingStep(0);
+        // Simulate progress
+        const interval = setInterval(() => {
+            setLoadingProgress(p => p < 90 ? p + 5 : p);
+        }, 300);
+
         const text = await pdfProcessor.extractText(file);
-        setLoadingProgress(30);
+        clearInterval(interval);
+        setLoadingProgress(50);
         
         setLoadingStep(1);
-        // Optional AI deep dive if provider set
         if (aiProvider !== 'manual') {
             setLoadingStep(2);
             const result = await apiService.processAI(text, 'borang', currentUser?.email || '');
@@ -182,15 +192,14 @@ export const BorangSemakan: React.FC = () => {
         borang_syarikat: pdfExtracted.companyName || form.borang_syarikat,
         borang_cidb: pdfExtracted.cidbNumber || form.borang_cidb,
         borang_gred: pdfExtracted.grade || form.borang_gred,
-        // ... other mapping
     });
     
-    if (pdfExtracted.directors) {
+    if (pdfExtracted.directors && pdfExtracted.directors.length > 0) {
         const newPersonnel = pdfExtracted.directors.map((name: string) => ({
             id: Math.random().toString(),
             name: name.toUpperCase(),
             roles: ['PENGARAH'],
-            s_ic: '', s_sb: '', s_epf: ''
+            s_ic: '✓', s_sb: '', s_epf: '✓'
         }));
         setPersonnel(newPersonnel);
     }
@@ -211,6 +220,26 @@ export const BorangSemakan: React.FC = () => {
     window.print();
   };
 
+  const syncToDatabase = () => {
+    if (!form.borang_syarikat) {
+        alert("Sila isi Nama Syarikat!");
+        return;
+    }
+    playSoundEffect('ui_click.mp3');
+    // Prepare data for InputDatabase
+    setSelectedRecord({
+        ...form,
+        personnel,
+        syarikat: form.borang_syarikat,
+        cidb: form.borang_cidb,
+        gred: form.borang_gred,
+        jenis: form.jenisApp,
+        tarikh: form.borang_tarikh_mohon,
+        fromBakul: true // Flag to trigger auto-fill in DB tab
+    });
+    setActiveTab('database');
+  };
+
   return (
     <div className="max-w-5xl mx-auto space-y-8 pb-32 print:p-0 print:space-y-0">
       {/* Hide non-printable elements during print */}
@@ -218,7 +247,7 @@ export const BorangSemakan: React.FC = () => {
         @media print {
             .no-print, header, nav, footer, .floating-bar { display: none !important; }
             .print-only { display: block !important; }
-            .card { border: 1px solid #000 !important; border-radius: 0 !important; box-shadow: none !important; }
+            .card { border: 1px solid #000 !important; border-radius: 0 !important; box-shadow: none !important; margin-bottom: 20px !important; }
             body { background: white !important; }
         }
       `}</style>
@@ -327,6 +356,34 @@ export const BorangSemakan: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left Column: Maklumat Asas */}
         <div className="lg:col-span-2 space-y-8">
+            <Card title="📄 JENIS PERMOHONAN">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {['BARU', 'PEMBAHARUAN', 'UBAH MAKLUMAT', 'UBAH GRED'].map(type => (
+                        <label key={type} className={cn(
+                            "p-4 rounded-2xl border-2 flex flex-col items-center gap-2 cursor-pointer transition-all",
+                            form.jenisApp === type ? "bg-blue-600 border-blue-600 text-white shadow-lg" : "bg-white border-slate-100 text-slate-400 hover:bg-slate-50"
+                        )}>
+                            <input 
+                                type="radio" 
+                                name="jenisApp" 
+                                className="hidden" 
+                                checked={form.jenisApp === type} 
+                                onChange={() => setForm({...form, jenisApp: type})} 
+                            />
+                            <div className="text-[10px] font-black uppercase text-center leading-tight tracking-tighter">{type.replace(' ', '\n')}</div>
+                        </label>
+                    ))}
+                </div>
+                <AnimatePresence>
+                    {(form.jenisApp === 'UBAH MAKLUMAT' || form.jenisApp === 'UBAH GRED') && (
+                        <motion.div initial={{opacity:0, height:0}} animate={{opacity:1, height:'auto'}} exit={{opacity:0, height:0}} className="mt-6 overflow-hidden">
+                            <label className="text-xs font-black uppercase text-slate-400 mb-2 block">Nyatakan Perubahan</label>
+                            <input id={form.jenisApp === 'UBAH GRED' ? 'ubah_gred' : 'ubah_maklumat'} value={form.jenisApp === 'UBAH GRED' ? form.ubah_gred : form.ubah_maklumat} onChange={handleChange} className={inputColor('ubah')} placeholder="Contoh: Naik G7 / Tukar Alamat" />
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </Card>
+
             <Card title="🏢 MAKLUMAT ASAS SYARIKAT">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="md:col-span-2">
@@ -343,6 +400,33 @@ export const BorangSemakan: React.FC = () => {
                             <option value="">PIlih Gred</option>
                             {['G1','G2','G3','G4','G5','G6','G7'].map(g => <option key={g} value={g}>{g}</option>)}
                         </select>
+                    </div>
+                </div>
+            </Card>
+
+            <Card title="📅 SEMAKAN E-INFO & BANK">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="space-y-4">
+                        <label className="text-[10px] font-black uppercase text-slate-400 block border-b pb-1">SSM E-INFO</label>
+                        <div>
+                            <p className="text-[9px] font-bold text-slate-400 mb-1 uppercase">Tarikh Cetakan</p>
+                            <input id="ssm_date_input" type="date" value={form.ssm_date_input} onChange={handleChange} className={inputColor(form.ssm_date_input)} />
+                        </div>
+                        <StatusField id="ssm_status" label="Status SSM" value={form.ssm_status} onSet={setStatus} />
+                    </div>
+                    <div className="space-y-4 border-l pl-8 border-slate-100">
+                        <label className="text-[10px] font-black uppercase text-slate-400 block border-b pb-1">PENYATA BANK</label>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <p className="text-[9px] font-bold text-slate-400 mb-1 uppercase">Bulan Penyata</p>
+                                <input id="bank_date_input" value={form.bank_date_input} onChange={handleChange} className={inputColor(form.bank_date_input)} placeholder="SEP 2024" />
+                            </div>
+                            <div>
+                                <p className="text-[9px] font-bold text-slate-400 mb-1 uppercase">T.T Pengurus</p>
+                                <StatusField id="bank_sign_input" label="" value={form.bank_sign_input} onSet={setStatus} />
+                            </div>
+                        </div>
+                        <StatusField id="bank_status_input" label="Status Bank" value={form.bank_status_input} onSet={setStatus} />
                     </div>
                 </div>
             </Card>
@@ -369,10 +453,10 @@ export const BorangSemakan: React.FC = () => {
             >
                 <div className="space-y-4">
                     {personnel.map((p, index) => (
-                        <div key={p.id} className="p-6 bg-slate-50 rounded-3xl border border-slate-200 relative group/p">
+                        <div key={p.id} className="p-6 bg-slate-50 rounded-3xl border border-slate-200 relative group/p transition-all hover:bg-white hover:shadow-lg">
                             <button 
                                 onClick={() => removePerson(p.id)}
-                                className="absolute -top-2 -right-2 w-8 h-8 bg-red-100 text-red-600 rounded-full items-center justify-center hidden group-hover/p:flex shadow-md"
+                                className="absolute -top-2 -right-2 w-8 h-8 bg-red-100 text-red-600 rounded-full items-center justify-center hidden group-hover/p:flex shadow-md border-2 border-white"
                             >
                                 <Trash2 size={16} />
                             </button>
@@ -393,8 +477,8 @@ export const BorangSemakan: React.FC = () => {
                                     <input 
                                         value={p.name} 
                                         onChange={(e) => updatePerson(p.id, { name: e.target.value.toUpperCase() })}
-                                        placeholder="NAMA PENUH"
-                                        className={cn("form-input h-10 font-bold", !p.name ? "bg-white" : "bg-blue-50 border-blue-200 text-blue-900")}
+                                        placeholder="NAMA PENUH SEPERTI DALAM IC"
+                                        className={cn("form-input h-10 font-black tracking-tight", !p.name ? "bg-white" : "bg-blue-50 border-blue-400 text-blue-900")}
                                     />
                                     <div className="mt-3 flex flex-wrap gap-2">
                                         {['PENGARAH', 'P.EKUITI', 'P.SPKK', 'T.T CEK'].map(role => (
@@ -407,8 +491,8 @@ export const BorangSemakan: React.FC = () => {
                                                     updatePerson(p.id, { roles: newRoles });
                                                 }}
                                                 className={cn(
-                                                    "px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all",
-                                                    p.roles.includes(role) ? "bg-blue-600 text-white shadow-md" : "bg-white text-slate-400 border border-slate-100"
+                                                    "px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border-2",
+                                                    p.roles.includes(role) ? "bg-blue-600 border-blue-600 text-white shadow-md scale-105" : "bg-white text-slate-400 border-slate-100 hover:border-blue-200"
                                                 )}
                                             >
                                                 {role}
@@ -416,7 +500,7 @@ export const BorangSemakan: React.FC = () => {
                                         ))}
                                     </div>
                                 </div>
-                                <div className="space-y-3">
+                                <div className="space-y-3 bg-white p-4 rounded-2xl shadow-inner border border-slate-100">
                                     <MiniStatusField label="IC" value={p.s_ic} onSet={(v) => updatePerson(p.id, { s_ic: v })} />
                                     <MiniStatusField label="SB" value={p.s_sb} onSet={(v) => updatePerson(p.id, { s_sb: v })} />
                                     <MiniStatusField label="EPF" value={p.s_epf} onSet={(v) => updatePerson(p.id, { s_epf: v })} />
@@ -431,6 +515,24 @@ export const BorangSemakan: React.FC = () => {
                     >
                         <Plus size={16} strokeWidth={3} /> TAMBAH PERSONEL
                     </button>
+                </div>
+            </Card>
+
+            <Card title="📜 SEMAKAN KWSP (3 BULAN)">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {[1, 2, 3].map(i => (
+                        <div key={i} className="space-y-3">
+                            <label className="text-[10px] font-black uppercase text-slate-400 block border-b pb-1">Bulan {i}</label>
+                            <input 
+                                id={`kwsp_date_${i}`} 
+                                value={(form as any)[`kwsp_date_${i}`]} 
+                                onChange={handleChange} 
+                                placeholder="CONTOH: OGOS" 
+                                className={inputColor((form as any)[`kwsp_date_${i}`])} 
+                            />
+                            <StatusField id={`kwsp_s${i}`} label="" value={(form as any)[`kwsp_s${i}`]} onSet={setStatus} />
+                        </div>
+                    ))}
                 </div>
             </Card>
         </div>
@@ -452,6 +554,28 @@ export const BorangSemakan: React.FC = () => {
                         <input id="stbDuration" value={form.stbDuration} onChange={handleChange} placeholder="DD/MM/YYYY - DD/MM/YYYY" className={inputColor(form.stbDuration)} />
                     </div>
                 </div>
+            </Card>
+
+            <Card title="⚠️ TATATERTIB">
+                <div className="flex bg-slate-100 p-1 rounded-2xl">
+                    {['ADA', 'TIADA'].map(t => (
+                        <button 
+                            key={t}
+                            onClick={() => setForm({...form, borang_tatatertib: t})}
+                            className={cn(
+                                "flex-1 py-3 rounded-xl text-xs font-black uppercase transition-all",
+                                form.borang_tatatertib === t ? (t === 'ADA' ? "bg-red-600 text-white shadow-lg" : "bg-green-600 text-white shadow-lg") : "text-slate-400"
+                            )}
+                        >
+                            {t}
+                        </button>
+                    ))}
+                </div>
+                {form.borang_tatatertib === 'ADA' && (
+                    <motion.div initial={{opacity:0}} animate={{opacity:1}} className="mt-4">
+                        <textarea id="borang_tatatertib_details" value={form.borang_tatatertib_details} onChange={handleChange} placeholder="Nyatakan butiran tatatertib..." className="form-input h-24 bg-red-50 border-red-200 text-red-900 pt-3" />
+                    </motion.div>
+                )}
             </Card>
 
             <Card title="⚖️ KEPUTUSAN SYOR">
@@ -479,10 +603,16 @@ export const BorangSemakan: React.FC = () => {
             <button 
                 onClick={() => {
                     if (window.confirm("Padam semua data?")) {
-                        setForm({}); setPersonnel([]); setPdfExtracted(null);
+                        setForm({
+                            jenisApp: 'BARU',
+                            borang_tatatertib: 'TIADA'
+                        }); 
+                        setPersonnel([{ id: Date.now().toString(), name: '', isCompany: false, roles: ['PENGARAH'], s_ic: '', s_sb: '', s_epf: '' }]);
+                        setPdfExtracted(null);
                     }
                 }}
                 className="w-14 h-14 bg-red-100 text-red-600 rounded-full flex items-center justify-center hover:bg-red-200 transition-colors shadow-sm"
+                title="Reset Borang"
             >
                 <RotateCcw size={24} />
             </button>
@@ -495,7 +625,7 @@ export const BorangSemakan: React.FC = () => {
                     <Printer size={20} /> CETAK
                 </button>
                 <button 
-                    onClick={() => setActiveTab('database')}
+                    onClick={syncToDatabase}
                     className="flex-1 flex items-center justify-center gap-2 py-4 bg-blue-600 text-white font-black rounded-3xl shadow-xl shadow-blue-200 hover:bg-blue-700 transition-all hover:scale-[1.02] active:scale-95 uppercase tracking-widest text-sm"
                 >
                     <Save size={20} /> SIMPAN KE DB

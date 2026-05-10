@@ -27,6 +27,7 @@ export const InputDatabase: React.FC = () => {
     db_tarikh_surat: '',
     db_start_date: '',
     db_tatatertib: '',
+    db_tatatertib_details: '',
     db_syor: '',
     db_pautan: '',
     db_justifikasi: '',
@@ -57,9 +58,13 @@ export const InputDatabase: React.FC = () => {
             db_gred: selectedRecord.gred || prev.db_gred,
             db_jenis: selectedRecord.jenis || prev.db_jenis,
             db_tarikh_surat: selectedRecord.tarikh || prev.db_tarikh_surat,
+            db_syor_status: selectedRecord.borang_syor_pengesyor || prev.db_syor_status,
+            db_justifikasi: selectedRecord.borang_justifikasi || prev.db_justifikasi,
+            db_tatatertib: selectedRecord.borang_tatatertib || prev.db_tatatertib,
+            db_tatatertib_details: selectedRecord.borang_tatatertib_details || prev.db_tatatertib_details,
+            db_negeri: selectedRecord.negeri || prev.db_negeri,
+            db_perubahan_input: selectedRecord.ubah_maklumat || selectedRecord.ubah_gred || prev.db_perubahan_input,
         }));
-        // We don't clear the flag here yet because user might want it in Borang too
-        // or we already cleared it in Borang.
     }
   }, [selectedRecord]);
 
@@ -199,6 +204,11 @@ export const InputDatabase: React.FC = () => {
                             {['BARU','PEMBAHARUAN','UBAH MAKLUMAT','UBAH GRED'].map(j => <option key={j} value={j}>{j}</option>)}
                         </select>
                     </div>
+                    <select id="db_negeri" value={form.db_negeri} onChange={handleChange} className={inputColor(form.db_negeri)}>
+                        <option value="">Negeri Operasi</option>
+                        {['JOHOR','KEDAH','KELANTAN','MELAKA','NEGERI SEMBILAN','PAHANG','PULAU PINANG','PERAK','PERLIS','SELANGOR','TERENGGANU','SABAH','SARAWAK','WP KUALA LUMPUR','WP LABUAN','WP PUTRAJAYA'].map(n => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                    <textarea id="db_alamat_perniagaan" value={form.db_alamat_perniagaan} onChange={handleChange} placeholder="Alamat Perniagaan (Jika Ada)" className="form-input bg-amber-50 h-28 pt-3 border-amber-300 resize-none font-bold" />
                     {(form.db_jenis === 'UBAH MAKLUMAT' || form.db_jenis === 'UBAH GRED') && (
                         <input id="db_perubahan_input" value={form.db_perubahan_input} onChange={handleChange} placeholder="Perincian Perubahan..." className="form-input bg-amber-50 border-amber-300" />
                     )}
@@ -220,6 +230,14 @@ export const InputDatabase: React.FC = () => {
                         <input type="checkbox" id="db_sah_syor" checked={form.db_sah_syor} onChange={handleChange} />
                         <span className="text-[10px] font-bold uppercase">Sahkan rekod adalah tepat</span>
                     </label>
+
+                    {form.db_tatatertib === 'ADA' && (
+                        <div className="p-4 bg-red-50 border border-red-200 rounded-2xl">
+                            <label className="text-[10px] font-black uppercase text-red-400 mb-1 block">Butiran Tatatertib (Dari Borang)</label>
+                            <p className="text-xs font-bold text-red-900">{form.db_tatatertib_details}</p>
+                        </div>
+                    )}
+
                     <Card title="💬 JENIS KONSULTANSI">
                         <div className="space-y-4">
                             <div className="grid grid-cols-2 gap-4">

@@ -103,7 +103,10 @@ export const apiService = {
    * Update or Insert a record
    */
   async saveRecord(data: any) {
-    const response = await api.post('', data);
+    const response = await api.post('', {
+      action: 'saveRecord',
+      ...data
+    });
     return response.data;
   },
 };
