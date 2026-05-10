@@ -53,7 +53,14 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
       <QueueSpiModal isOpen={isQueueModalOpen} onClose={() => setIsQueueModalOpen(false)} />
       {/* Mobile Header */}
       <header className="md:hidden bg-blue-600 text-white p-4 flex justify-between items-center sticky top-0 z-50 shadow-md">
-        <h1 className="font-bold text-lg">SPTB (HQ)</h1>
+        <div className="flex items-center gap-3">
+          <img 
+            src="https://upload.wikimedia.org/wikipedia/commons/2/26/Coat_of_arms_of_Malaysia.svg" 
+            alt="Jata Negara" 
+            className="w-8 h-8 brightness-0 invert" 
+          />
+          <h1 className="font-bold text-lg">SPTB (HQ)</h1>
+        </div>
         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
           {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
         </button>

@@ -55,8 +55,12 @@ export const Login: React.FC = () => {
         </div>
 
         <div className="text-center mb-10 relative z-10">
-          <div className="bg-blue-100 w-24 h-24 rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-inner rotate-3 hover:rotate-0 transition-transform duration-500">
-            <LogIn size={48} className="text-blue-600" />
+          <div className="w-32 h-32 flex items-center justify-center mx-auto mb-6 transition-transform duration-500 hover:scale-110">
+            <img 
+              src="https://upload.wikimedia.org/wikipedia/commons/2/26/Coat_of_arms_of_Malaysia.svg" 
+              alt="Jata Negara Malaysia" 
+              className="w-full h-full object-contain"
+            />
           </div>
           <h1 className="text-3xl font-black text-slate-800 uppercase tracking-tight leading-none mb-2">
             Sistem Bersepadu <span className="text-blue-600">SPTB</span>
