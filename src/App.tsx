@@ -14,6 +14,7 @@ import { PaparanPelulus } from './pages/PaparanPelulus';
 import { KeputusanPelulus } from './pages/KeputusanPelulus';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { PrintLayouts } from './layouts/PrintLayouts';
+import { ProfileSyarikat } from './pages/ProfileSyarikat';
 
 const AppContent = () => {
   const { currentUser, loading } = useAuth();
@@ -45,6 +46,7 @@ const AppContent = () => {
       case 'borang': return <BorangSemakan />;
       case 'database': return <InputDatabase />;
       case 'youtube': return <PortalYoutube />;
+      case 'profile': return <ProfileSyarikat />;
       default: return <Dashboard />;
     }
   };

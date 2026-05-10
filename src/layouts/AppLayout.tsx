@@ -18,6 +18,7 @@ import {
 import { cn } from '../lib/utils';
 import { useAppContext } from '../context/AppContext';
 import { QueueSpiModal } from '../components/QueueSpiModal';
+import { DigitalClock } from '../components/DigitalClock';
 
 interface NavItem {
   id: string;
@@ -71,47 +72,80 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
         "bg-white/80 backdrop-blur-md border-b sticky top-0 md:top-0 z-40 px-4 py-2 flex justify-center",
         isMobileMenuOpen ? "flex flex-col absolute inset-x-0 top-[60px] bg-white h-screen md:h-auto overflow-y-auto" : "hidden md:flex"
       )}>
-        <nav className="flex flex-wrap gap-1 justify-center max-w-7xl w-full">
-          {filteredNavItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => {
-                setActiveTab(item.id);
-                setIsMobileMenuOpen(false);
-              }}
-              className={cn(
-                "flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all duration-300",
-                activeTab === item.id 
-                  ? "bg-blue-600 text-white shadow-lg shadow-blue-200 scale-105" 
-                  : "text-slate-600 hover:bg-slate-100"
-              )}
-            >
-              <span className="flex-shrink-0">{item.icon}</span>
-              <span className={cn(
-                "transition-all duration-300 overflow-hidden whitespace-nowrap",
-                activeTab === item.id ? "max-w-[200px] opacity-100" : "max-w-0 opacity-0 md:max-w-[200px] md:opacity-100"
-              )}>
-                {item.label}
-              </span>
-            </button>
-          ))}
-          
-          <button
-            onClick={logout}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium text-red-600 hover:bg-red-50 ml-auto"
-          >
-            <LogOut size={20} />
-            <span className="hidden md:inline">Log Keluar</span>
-          </button>
+        <nav className="flex flex-wrap items-center gap-1 max-w-7xl w-full">
+          <div className="flex items-center gap-3 mr-6 group">
+            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-200 group-hover:rotate-12 transition-transform duration-500">
+              <img 
+                src="https://upload.wikimedia.org/wikipedia/commons/2/26/Coat_of_arms_of_Malaysia.svg" 
+                alt="Jata Negara" 
+                className="w-7 h-7 brightness-0 invert" 
+              />
+            </div>
+            <div className="hidden lg:block">
+              <h1 className="font-black text-xs uppercase tracking-widest text-slate-400 leading-none">Sistem Bersepadu</h1>
+              <h2 className="font-black text-xl text-slate-800 leading-none">SPTB-HQ <span className="text-blue-600">V.3</span></h2>
+            </div>
+          </div>
 
-          <button 
-            onClick={() => setIsQueueModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all"
-            title="Queue Status SPI"
-          >
-            <Clock size={20} />
-            <span className="hidden md:inline text-[10px] uppercase font-black tracking-widest ml-1">Queue SPI</span>
-          </button>
+          <div className="flex flex-1 gap-1 items-center overflow-x-auto no-scrollbar">
+            {filteredNavItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => {
+                  setActiveTab(item.id);
+                  setIsMobileMenuOpen(false);
+                }}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all duration-300 flex-shrink-0",
+                  activeTab === item.id 
+                    ? "bg-blue-600 text-white shadow-lg shadow-blue-200" 
+                    : "text-slate-600 hover:bg-slate-100"
+                )}
+              >
+                <span className="flex-shrink-0">{item.icon}</span>
+                <span className={cn(
+                  "transition-all duration-300 overflow-hidden whitespace-nowrap hidden lg:inline",
+                  activeTab === item.id ? "max-w-[200px] opacity-100" : "max-w-[200px] opacity-100"
+                )}>
+                  {item.label}
+                </span>
+              </button>
+            ))}
+          </div>
+          
+          <div className="flex items-center gap-6 ml-4">
+            <div className="hidden xl:block">
+              <DigitalClock />
+            </div>
+
+            <div className="hidden md:flex items-center gap-3 bg-slate-50 p-1.5 rounded-2xl border border-slate-100">
+              <div 
+                className="text-right cursor-pointer hover:bg-white p-1 rounded-xl transition-colors"
+                onClick={() => setActiveTab('youtube')}
+              >
+                <p className="text-[10px] font-black text-slate-400 uppercase leading-none mb-1">{currentUser?.name}</p>
+                <div className="flex items-center justify-end gap-1.5">
+                  <div className={cn("w-1.5 h-1.5 rounded-full animate-pulse", currentUser ? "bg-green-500" : "bg-red-500")} />
+                  <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{currentUser?.role}</span>
+                </div>
+              </div>
+              <button
+                onClick={logout}
+                className="w-10 h-10 bg-white text-red-600 rounded-xl flex items-center justify-center shadow-sm hover:bg-red-50 hover:text-red-700 transition-all active:scale-95"
+                title="Log Keluar"
+              >
+                <LogOut size={18} />
+              </button>
+            </div>
+
+            <button 
+              onClick={() => setIsQueueModalOpen(true)}
+              className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center hover:bg-blue-100 transition-all active:scale-95"
+              title="Queue Status SPI"
+            >
+              <Clock size={20} />
+            </button>
+          </div>
         </nav>
       </div>
 

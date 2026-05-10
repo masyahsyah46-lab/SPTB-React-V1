@@ -34,7 +34,7 @@ interface Person {
 
 export const BorangSemakan: React.FC = () => {
   const { currentUser } = useAuth();
-  const { playSoundEffect, autoSaveForm, loadPersistedForm, setActiveTab } = useAppContext();
+  const { playSoundEffect, autoSaveForm, loadPersistedForm, setActiveTab, selectedRecord, setSelectedRecord } = useAppContext();
   
   // Form State
   const [form, setForm] = useState<any>({
@@ -61,7 +61,8 @@ export const BorangSemakan: React.FC = () => {
     kwsp_date_2: '', kwsp_s2: '',
     kwsp_date_3: '', kwsp_s3: '',
     ubah_maklumat: '',
-    ubah_gred: ''
+    ubah_gred: '',
+    borang_syor_pengesyor: ''
   });
 
   const [personnel, setPersonnel] = useState<Person[]>([
@@ -80,6 +81,22 @@ export const BorangSemakan: React.FC = () => {
   const [pdfExtracted, setPdfExtracted] = useState<any>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-fill from Bakul
+  useEffect(() => {
+    if (selectedRecord && selectedRecord.fromBakul) {
+        setForm(prev => ({
+            ...prev,
+            borang_syarikat: selectedRecord.syarikat || prev.borang_syarikat,
+            borang_cidb: selectedRecord.cidb || prev.borang_cidb,
+            borang_gred: selectedRecord.gred || prev.borang_gred,
+            jenisApp: selectedRecord.jenis || prev.jenisApp,
+            borang_tarikh_mohon: selectedRecord.tarikh || prev.borang_tarikh_mohon,
+            district: selectedRecord.district || prev.district
+        }));
+        setSelectedRecord({ ...selectedRecord, fromBakul: false });
+    }
+  }, [selectedRecord, setSelectedRecord]);
 
   // Persistence
   useEffect(() => {
@@ -189,10 +206,25 @@ export const BorangSemakan: React.FC = () => {
     !val ? "bg-amber-50 border-amber-300 text-amber-900 placeholder:text-amber-300" : "bg-green-50 border-green-400 text-green-900"
   );
 
+  const handlePrint = () => {
+    playSoundEffect('ui_click.mp3');
+    window.print();
+  };
+
   return (
-    <div className="max-w-5xl mx-auto space-y-8 pb-32">
-      {/* AI Extraction Section */}
-      <section className="bg-slate-900 rounded-[3rem] p-8 text-white shadow-2xl relative overflow-hidden group">
+    <div className="max-w-5xl mx-auto space-y-8 pb-32 print:p-0 print:space-y-0">
+      {/* Hide non-printable elements during print */}
+      <style>{`
+        @media print {
+            .no-print, header, nav, footer, .floating-bar { display: none !important; }
+            .print-only { display: block !important; }
+            .card { border: 1px solid #000 !important; border-radius: 0 !important; box-shadow: none !important; }
+            body { background: white !important; }
+        }
+      `}</style>
+
+      {/* AI Extraction Section (no-print) */}
+      <section className="bg-slate-900 rounded-[3rem] p-8 text-white shadow-2xl relative overflow-hidden group no-print">
         <div className="absolute top-0 right-0 p-12 opacity-10 group-hover:scale-125 transition-transform duration-1000">
             <Sparkles size={200} />
         </div>
@@ -441,8 +473,8 @@ export const BorangSemakan: React.FC = () => {
         </div>
       </div>
 
-      {/* Floating Action Bar */}
-      <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-3xl px-4 z-[100]">
+      {/* Floating Action Bar (no-print) */}
+      <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-3xl px-4 z-[100] no-print floating-bar">
         <div className="bg-white/80 backdrop-blur-xl border border-white/20 p-4 rounded-[2.5rem] shadow-2xl flex items-center justify-between gap-4">
             <button 
                 onClick={() => {
@@ -456,7 +488,10 @@ export const BorangSemakan: React.FC = () => {
             </button>
             
             <div className="flex-1 flex gap-3">
-                <button className="flex-1 flex items-center justify-center gap-2 py-4 bg-slate-800 text-white font-black rounded-3xl shadow-xl hover:bg-slate-900 transition-all hover:scale-[1.02] active:scale-95 uppercase tracking-widest text-sm">
+                <button 
+                    onClick={handlePrint}
+                    className="flex-1 flex items-center justify-center gap-2 py-4 bg-slate-800 text-white font-black rounded-3xl shadow-xl hover:bg-slate-900 transition-all hover:scale-[1.02] active:scale-95 uppercase tracking-widest text-sm"
+                >
                     <Printer size={20} /> CETAK
                 </button>
                 <button 

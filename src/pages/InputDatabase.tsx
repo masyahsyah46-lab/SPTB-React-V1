@@ -16,7 +16,7 @@ import { motion, AnimatePresence } from 'motion/react';
 
 export const InputDatabase: React.FC = () => {
   const { currentUser } = useAuth();
-  const { playSoundEffect } = useAppContext();
+  const { playSoundEffect, selectedRecord, setSelectedRecord, setActiveTab } = useAppContext();
   
   const [form, setForm] = useState<any>({
     db_syarikat: '',
@@ -36,7 +36,9 @@ export const InputDatabase: React.FC = () => {
     cb_notify_whatsapp: false,
     db_pelulus_whatsapp: '',
     cb_create_folder: true,
-    db_alamat_perniagaan: ''
+    db_alamat_perniagaan: '',
+    db_konsultansi: [],
+    db_tarikh_konsultansi: ''
   });
 
   const [isSaving, setIsSaving] = useState(false);
@@ -44,6 +46,22 @@ export const InputDatabase: React.FC = () => {
   const [progress, setProgress] = useState(0);
   const [driveUrl, setDriveUrl] = useState('');
   const [approvers, setApprovers] = useState<any[]>([]);
+
+  // Auto-fill logic
+  useEffect(() => {
+    if (selectedRecord && selectedRecord.fromBakul) {
+        setForm(prev => ({
+            ...prev,
+            db_syarikat: selectedRecord.syarikat || prev.db_syarikat,
+            db_cidb: selectedRecord.cidb || prev.db_cidb,
+            db_gred: selectedRecord.gred || prev.db_gred,
+            db_jenis: selectedRecord.jenis || prev.db_jenis,
+            db_tarikh_surat: selectedRecord.tarikh || prev.db_tarikh_surat,
+        }));
+        // We don't clear the flag here yet because user might want it in Borang too
+        // or we already cleared it in Borang.
+    }
+  }, [selectedRecord]);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -134,14 +152,22 @@ export const InputDatabase: React.FC = () => {
     <div className="max-w-4xl mx-auto pb-32">
       <LoadingOverlay isVisible={isSaving} message="Memproses Penyimpanan..." progress={progress} steps={['Drive...', 'Sheet...', 'WhatsApp...']} currentStep={saveStep} />
       <div className="space-y-8 animate-fadeIn">
-        <div className="flex items-center gap-6 mb-10">
-            <div className="w-16 h-16 bg-blue-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200">
-                <Database size={32} />
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
+            <div className="flex items-center gap-6">
+                <div className="w-16 h-16 bg-blue-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200">
+                    <Database size={32} />
+                </div>
+                <div>
+                    <h1 className="text-3xl font-black text-slate-800 tracking-tight uppercase line-height-tight">INPUT DATABASE</h1>
+                    <p className="text-slate-500 font-medium">Rekod permohonan ke pangkalan data KUSKOP</p>
+                </div>
             </div>
-            <div>
-                <h1 className="text-3xl font-black text-slate-800 tracking-tight">INPUT DATABASE</h1>
-                <p className="text-slate-500 font-medium">Langkah terakhir untuk memasukkan data ke pangkalan data KUSKOP</p>
-            </div>
+            <button 
+                onClick={() => setActiveTab('profile')}
+                className="px-6 py-4 bg-emerald-600 text-white font-black rounded-2xl shadow-xl shadow-emerald-100 hover:bg-emerald-700 transition-all active:scale-95 flex items-center gap-2 uppercase tracking-widest text-[10px]"
+            >
+                <Database size={18} /> CIPTA PROFIL SYARIKAT
+            </button>
         </div>
 
         <section className={cn("p-8 rounded-[2.5rem] border-2 transition-all duration-500", form.cb_create_folder ? "bg-blue-600 text-white border-blue-400 shadow-xl" : "bg-white border-slate-100")}>
@@ -194,6 +220,53 @@ export const InputDatabase: React.FC = () => {
                         <input type="checkbox" id="db_sah_syor" checked={form.db_sah_syor} onChange={handleChange} />
                         <span className="text-[10px] font-bold uppercase">Sahkan rekod adalah tepat</span>
                     </label>
+                    <Card title="💬 JENIS KONSULTANSI">
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                {['EMEL', 'WHATSAPP', 'PANGGILAN', 'LAWATAN'].map(type => (
+                                    <label key={type} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl cursor-pointer hover:bg-blue-50 transition-colors">
+                                        <input 
+                                            type="checkbox" 
+                                            name="consultancy" 
+                                            value={type}
+                                            checked={form.db_konsultansi?.includes(type)}
+                                            onChange={(e) => {
+                                                const current = form.db_konsultansi || [];
+                                                const next = e.target.checked ? [...current, type] : current.filter((t: string) => t !== type);
+                                                setForm({...form, db_konsultansi: next});
+                                            }}
+                                            className="w-4 h-4 rounded text-blue-600"
+                                        />
+                                        <span className="text-xs font-black text-slate-700 uppercase tracking-widest">{type}</span>
+                                    </label>
+                                ))}
+                            </div>
+                            <input id="db_tarikh_konsultansi" type="date" value={form.db_tarikh_konsultansi} onChange={handleChange} className={inputColor(form.db_tarikh_konsultansi)} />
+                        </div>
+                    </Card>
+
+                    <AnimatePresence>
+                        {form.db_konsultansi?.includes('LAWATAN') && (
+                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                                <Card title="🏠 BUTIRAN LAWATAN">
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Tarikh Lawat</label>
+                                            <input id="db_tarikh_lawat" type="date" value={form.db_tarikh_lawat} onChange={handleChange} className={inputColor(form.db_tarikh_lawat)} />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Tarikh Submit SPTB</label>
+                                            <input id="db_tarikh_submit_sptb" type="date" value={form.db_tarikh_submit_sptb} onChange={handleChange} className={inputColor(form.db_tarikh_submit_sptb)} />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Syor Lawatan</label>
+                                            <textarea id="db_syor_lawatan" value={form.db_syor_lawatan} onChange={handleChange} className={cn(inputColor(form.db_syor_lawatan), "h-24 pt-3 resize-none")} placeholder="Syor hasil lawatan..." />
+                                        </div>
+                                    </div>
+                                </Card>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 </div>
             </Card>
         </div>

@@ -18,7 +18,7 @@ import { LoadingOverlay } from '../components/LoadingOverlay';
 
 export const BakulPermohonan: React.FC = () => {
   const { currentUser } = useAuth();
-  const { playSoundEffect, setActiveTab, setCachedData, cachedData } = useAppContext();
+  const { playSoundEffect, setActiveTab, setCachedData, cachedData, setSelectedRecord } = useAppContext();
   const [basket, setBasket] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -63,8 +63,24 @@ export const BakulPermohonan: React.FC = () => {
   const handleProses = async (item: any) => {
     playSoundEffect('ui_click.mp3');
     
-    // Set auto-fill logic would normally go here into context or local state
-    // For this migration, we simplify and navigate
+    const persisted = localStorage.getItem('stb_form_persistence');
+    if (persisted) {
+        if (!window.confirm("Data borang sedia ada dikesan. Adakah anda ingin MENIMPA (Overwrite) data tersebut dengan maklumat syarikat ini?")) {
+            return;
+        }
+    }
+
+    // Set auto-fill logic
+    setSelectedRecord({
+        syarikat: item.company,
+        cidb: item.cidb,
+        gred: item.grade,
+        jenis: item.type,
+        tarikh: item.dateSubmitted,
+        district: item.district,
+        fromBakul: true
+    });
+    
     setActiveTab('borang');
     
     // Update status in Firestore

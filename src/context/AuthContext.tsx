@@ -9,6 +9,8 @@ interface User {
   phone?: string;
   imageUrl?: string;
   firebaseCode?: string;
+  assignedDigits?: string[];
+  assignedChars?: string[];
 }
 
 interface AuthContextType {

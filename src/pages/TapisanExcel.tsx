@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import * as XLSX from 'xlsx';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   FileSpreadsheet, 
   Upload, 
@@ -25,17 +26,20 @@ interface ExcelItem {
   dateSubmitted: string;
   rawSortDate: Date;
   updateType: string;
+  isAutoAssigned: boolean;
 }
 
 export const TapisanExcel: React.FC = () => {
   const { currentUser } = useAuth();
-  const { playSoundEffect, cachedData } = useAppContext();
+  const { playSoundEffect, cachedData, setActiveTab } = useAppContext();
   const [rawData, setRawData] = useState<ExcelItem[]>([]);
   const [districts, setDistricts] = useState<string[]>([]);
   const [selectedDistricts, setSelectedDistricts] = useState<Set<string>>(new Set());
   const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(false);
   const [fileName, setPdfFileName] = useState('Tiada fail dipilih');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [savingType, setSavingType] = useState('BARU');
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -78,15 +82,42 @@ export const TapisanExcel: React.FC = () => {
           if(parts.length === 3) sortDate = new Date(parseInt(parts[2]), parseInt(parts[1])-1, parseInt(parts[0]));
         }
       }
+
+      const company = String(row[keys.company] || '-').trim().toUpperCase();
+      const cidb = String(row[keys.cidb] || '-').trim();
+      const lastDigit = cidb.slice(-1);
+      const firstChar = company.charAt(0);
+
+      // Auto Tapis Logic: Based on CIDB Last Digit and First Character
+      // This is a representative rule - in a real app, these would come from the pengesyor's profile
+      let autoAssign = false;
+      if (currentUser?.role === 'PENGESYOR') {
+          const assignedDigits = currentUser.assignedDigits || []; // e.g. ['1', '2', '3']
+          const assignedChars = currentUser.assignedChars || []; // e.g. ['A', 'B', 'C']
+          
+          if (assignedDigits.length > 0 && assignedDigits.includes(lastDigit)) autoAssign = true;
+          if (assignedChars.length > 0 && assignedChars.includes(firstChar)) autoAssign = true;
+          
+          // Fallback simple rule if no specific assignments: assign even/odd based on some logic
+          if (assignedDigits.length === 0 && assignedChars.length === 0) {
+              const codeNum = parseInt(currentUser.firebaseCode || '0') % 2;
+              const digitNum = parseInt(lastDigit) % 2;
+              if (codeNum === digitNum) autoAssign = true;
+          }
+      } else {
+          autoAssign = true; // Admin/Superadmin see everything
+      }
+
       return {
         id: idx,
-        company: String(row[keys.company] || '-').trim().toUpperCase(),
-        cidb: String(row[keys.cidb] || '-').trim(),
+        company,
+        cidb,
         district: keys.district !== -1 ? String(row[keys.district] || '-').trim().toUpperCase() : '-',
         grade: String(row[keys.grade] || '-').trim().toUpperCase(),
         dateSubmitted: dateStr,
         rawSortDate: sortDate,
-        updateType: keys.updateType !== -1 ? String(row[keys.updateType] || '-').trim() : '-'
+        updateType: keys.updateType !== -1 ? String(row[keys.updateType] || '-').trim() : '-',
+        isAutoAssigned: autoAssign
       };
     });
 
@@ -95,6 +126,11 @@ export const TapisanExcel: React.FC = () => {
     setDistricts(uniqueDistricts);
     setSelectedDistricts(new Set(uniqueDistricts));
     playSoundEffect('positive_chime.mp3');
+
+    if (currentUser?.role === 'PENGESYOR') {
+        const assignedItems = items.filter(i => i.isAutoAssigned);
+        setSelectedItems(new Set(assignedItems.map(i => i.id)));
+    }
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -130,8 +166,12 @@ export const TapisanExcel: React.FC = () => {
         alert("Sila pilih permohonan terlebih dahulu!");
         return;
     }
+    setIsModalOpen(true);
+  };
 
+  const confirmSaveToBakul = async () => {
     setLoading(true);
+    setIsModalOpen(false);
     try {
         const promises = Array.from(selectedItems).map(id => {
             const item = rawData.find(i => i.id === id);
@@ -141,7 +181,7 @@ export const TapisanExcel: React.FC = () => {
                 cidb: item.cidb,
                 grade: item.grade,
                 district: item.district,
-                type: item.updateType,
+                type: savingType,
                 dateSubmitted: item.dateSubmitted,
                 sortableDate: Timestamp.fromDate(item.rawSortDate),
                 status: 'Pending',
@@ -153,8 +193,8 @@ export const TapisanExcel: React.FC = () => {
 
         await Promise.all(promises);
         playSoundEffect('positive_chime.mp3');
-        alert("Berjaya disimpan ke bakul!");
         setSelectedItems(new Set());
+        setActiveTab('bakul');
     } catch (e) {
         alert("Ralat menyimpan ke bakul.");
     } finally {
@@ -165,6 +205,54 @@ export const TapisanExcel: React.FC = () => {
   return (
     <div className="space-y-8 animate-fadeIn pb-20">
       <LoadingOverlay isVisible={loading} message="Memproses Data Excel..." progress={loading ? 50 : 100} />
+      
+      {/* Modal Simpan Ke Bakul */}
+      {isModalOpen && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
+              <motion.div 
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="bg-white rounded-[2.5rem] w-full max-w-md p-10 shadow-2xl relative overflow-hidden"
+              >
+                  <div className="absolute top-0 right-0 p-8 text-blue-50">
+                      <ShoppingCart size={120} />
+                  </div>
+                  <h2 className="text-2xl font-black text-slate-800 mb-2 relative z-10">SIMPAN KE BAKUL</h2>
+                  <p className="text-slate-400 font-medium mb-8 relative z-10 uppercase tracking-widest text-xs">Pilih jenis permohonan untuk {selectedItems.size} syarikat</p>
+                  
+                  <div className="space-y-3 mb-10 relative z-10">
+                      {['BARU', 'PEMBAHARUAN', 'UBAH MAKLUMAT', 'UBAH GRED'].map(type => (
+                          <button 
+                            key={type}
+                            onClick={() => setSavingType(type)}
+                            className={cn(
+                                "w-full p-4 rounded-2xl border-2 flex items-center justify-between transition-all",
+                                savingType === type ? "border-blue-600 bg-blue-50 text-blue-700" : "border-slate-100 text-slate-400 hover:border-slate-200"
+                            )}
+                          >
+                              <span className="font-black text-sm">{type}</span>
+                              {savingType === type && <CheckCircle2 size={20} />}
+                          </button>
+                      ))}
+                  </div>
+
+                  <div className="flex gap-4 relative z-10">
+                      <button 
+                        onClick={() => setIsModalOpen(false)}
+                        className="flex-1 py-4 text-slate-400 font-black uppercase tracking-widest text-xs hover:text-slate-600"
+                      >
+                          Batal
+                      </button>
+                      <button 
+                        onClick={confirmSaveToBakul}
+                        className="flex-1 py-4 bg-blue-600 text-white font-black rounded-2xl shadow-xl shadow-blue-200 uppercase tracking-widest text-xs hover:bg-blue-700 active:scale-95 transition-all"
+                      >
+                          Sahkan Simpan
+                      </button>
+                  </div>
+              </motion.div>
+          </div>
+      )}
       
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
         <div className="flex items-center gap-6">
@@ -183,8 +271,11 @@ export const TapisanExcel: React.FC = () => {
             onClick={() => fileInputRef.current?.click()}
             className="cursor-pointer group flex flex-col items-center"
         >
-            <div className="w-24 h-24 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 group-hover:bg-emerald-100 transition-all duration-500">
-                <Upload size={40} />
+            <div className={cn(
+                "w-24 h-24 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 group-hover:bg-emerald-100 transition-all duration-1000",
+                loading && "morph-box bg-blue-600 text-white"
+            )}>
+                {loading ? <div className="text-xl font-black">AI</div> : <Upload size={40} />}
             </div>
             <h3 className="text-xl font-black text-slate-800 mb-2">Pilih Fail Excel</h3>
             <p className="text-slate-400 font-medium text-sm mb-6 uppercase tracking-widest">{fileName}</p>

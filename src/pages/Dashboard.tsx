@@ -80,7 +80,7 @@ const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 export const Dashboard: React.FC = () => {
   const { currentUser } = useAuth();
-  const { dashboardData, cachedData, refreshData } = useAppContext();
+  const { dashboardData, cachedData, refreshData, setActiveTab } = useAppContext();
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState({
     period: 'monthly',
@@ -94,21 +94,51 @@ export const Dashboard: React.FC = () => {
     setLoading(false);
   };
 
+  const stats = useMemo(() => {
+    // In a real app, this would be computed from cachedData or fetched
+    return {
+      total: cachedData.length,
+      lulus: cachedData.filter(i => (i.kelulusan || '').includes('LULUS') || (i.kelulusan || '').includes('SOKONG')).length,
+      tolak: cachedData.filter(i => (i.kelulusan || '').includes('TOLAK') || (i.kelulusan || '').includes('SIASAT')).length,
+      proses: cachedData.filter(i => !(i.kelulusan || '').includes('LULUS') && !(i.kelulusan || '').includes('TOLAK') && !(i.kelulusan || '').includes('SIASAT')).length,
+      typeStats: cachedData.reduce((acc: any, item) => {
+        const type = (item.jenis || 'LAIN-LAIN').toUpperCase();
+        acc[type] = (acc[type] || 0) + 1;
+        return acc;
+      }, {}),
+      consultationStats: cachedData.reduce((acc: any, item) => {
+        const platform = (item.db_konsultansi_platform || 'EMEL').toUpperCase();
+        acc[platform] = (acc[platform] || 0) + 1;
+        return acc;
+      }, { 'EMEL': 0, 'WHATSAPP': 0, 'PANGGILAN': 0 })
+    };
+  }, [cachedData]);
+
+  const consultationChartData = useMemo(() => ({
+    labels: Object.keys(stats.consultationStats),
+    datasets: [{
+      label: 'Jenis Konsultansi',
+      data: Object.values(stats.consultationStats),
+      backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444'],
+      borderRadius: 8
+    }]
+  }), [stats]);
+
   const statusChartData = useMemo(() => ({
     labels: currentUser?.role === 'PENGESYOR' ? ['SOKONG', 'TIDAK SOKONG', 'PROSES'] : ['LULUS', 'TOLAK/SIASAT', 'PROSES'],
     datasets: [{
-      data: [dashboardData.lulus, dashboardData.tolak, dashboardData.proses],
+      data: [stats.lulus, stats.tolak, stats.proses],
       backgroundColor: ['#22c55e', '#ef4444', '#f59e0b'],
       borderWidth: 3,
       borderColor: '#ffffff',
       hoverOffset: 15,
       borderRadius: 8
     }]
-  }), [dashboardData, currentUser]);
+  }), [stats, currentUser]);
 
   const typeChartData = useMemo(() => {
-    const labels = Object.keys(dashboardData.typeStats);
-    const data = Object.values(dashboardData.typeStats);
+    const labels = Object.keys(stats.typeStats);
+    const data = Object.values(stats.typeStats);
     return {
       labels,
       datasets: [{
@@ -120,7 +150,7 @@ export const Dashboard: React.FC = () => {
         borderRadius: 6
       }]
     };
-  }, [dashboardData]);
+  }, [stats]);
 
   const commonOptions: ChartOptions<any> = {
     responsive: true,
@@ -216,10 +246,10 @@ export const Dashboard: React.FC = () => {
 
       {/* Stats Overview */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard title="Jumlah Keseluruhan" value={dashboardData.total} icon={<ClipboardList className="text-blue-600" />} />
-        <StatCard title={currentUser?.role === 'PENGESYOR' ? 'Disokong' : 'Diluluskan'} value={dashboardData.lulus} icon={<CheckCircle className="text-green-600" />} color="text-green-600" />
-        <StatCard title={currentUser?.role === 'PENGESYOR' ? 'Ditolak' : 'Tolak/Siasat'} value={dashboardData.tolak} icon={<XCircle className="text-red-600" />} color="text-red-600" />
-        <StatCard title="Kadar Kelulusan" value={`${dashboardData.total > 0 ? Math.round((dashboardData.lulus / dashboardData.total) * 100) : 0}%`} icon={<Activity className="text-amber-600" />} color="text-amber-600" />
+        <StatCard title="Jumlah Keseluruhan" value={stats.total} icon={<ClipboardList className="text-blue-600" />} />
+        <StatCard title={currentUser?.role === 'PENGESYOR' ? 'Disokong' : 'Diluluskan'} value={stats.lulus} icon={<CheckCircle className="text-green-600" />} color="text-green-600" />
+        <StatCard title={currentUser?.role === 'PENGESYOR' ? 'Ditolak' : 'Tolak/Siasat'} value={stats.tolak} icon={<XCircle className="text-red-600" />} color="text-red-600" />
+        <StatCard title="Kadar Sokongan" value={`${stats.total > 0 ? Math.round((stats.lulus / stats.total) * 100) : 0}%`} icon={<Activity className="text-amber-600" />} color="text-amber-600" />
       </div>
 
       {/* Charts Section */}
@@ -230,6 +260,10 @@ export const Dashboard: React.FC = () => {
 
         <ChartCard title="Jenis Permohonan">
           <Doughnut data={typeChartData} options={{...commonOptions, cutout: '65%'}} />
+        </ChartCard>
+
+        <ChartCard title="Taburan Jenis Konsultansi">
+          <Bar data={consultationChartData} options={commonOptions} />
         </ChartCard>
 
         <ChartCard title="Trend Bulanan" className="lg:col-span-2">
@@ -279,6 +313,58 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Detailed Analysis Table */}
+      <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
+        <div className="p-8 border-b bg-slate-50/50 flex justify-between items-center">
+          <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">Jadual Analisis Terperinci</h3>
+          <span className="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-black">{cachedData.length} REKOD</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b">
+              <tr>
+                <th className="px-8 py-4">Syarikat</th>
+                <th className="px-4 py-4">Gred</th>
+                <th className="px-4 py-4">Jenis</th>
+                <th className="px-4 py-4">Platform</th>
+                <th className="px-4 py-4">Status</th>
+                <th className="px-4 py-4 text-right">Kadar Sokongan</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y text-sm">
+              {cachedData.slice(0, 10).map((item, idx) => (
+                <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-8 py-4 font-bold text-slate-700">{item.syarikat}</td>
+                  <td className="px-4 py-4"><span className="bg-slate-100 px-2 py-0.5 rounded font-black text-[10px]">{item.gred}</span></td>
+                  <td className="px-4 py-4 text-xs font-bold text-blue-600">{item.jenis}</td>
+                  <td className="px-4 py-4 text-xs font-medium text-slate-500">{item.db_konsultansi_platform || 'EMEL'}</td>
+                  <td className="px-4 py-4">
+                    <span className={cn(
+                      "px-3 py-1 rounded-full text-[10px] font-black uppercase",
+                      (item.kelulusan || '').includes('LULUS') || (item.kelulusan || '').includes('SOKONG') ? "bg-green-100 text-green-700" :
+                      (item.kelulusan || '').includes('TOLAK') ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
+                    )}>
+                      {item.kelulusan || 'DALAM PROSES'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-4 text-right font-black text-slate-400">100%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {cachedData.length > 10 && (
+            <div className="p-4 text-center border-t">
+              <button 
+                onClick={() => setActiveTab('senarai')}
+                className="text-sm font-black text-blue-600 uppercase tracking-widest hover:underline"
+              >
+                Lihat Semua Rekod »
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 };
