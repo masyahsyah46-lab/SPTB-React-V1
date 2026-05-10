@@ -18,40 +18,20 @@ import { LoadingOverlay } from '../components/LoadingOverlay';
 
 export const BakulPermohonan: React.FC = () => {
   const { currentUser } = useAuth();
-  const { playSoundEffect, setActiveTab, setCachedData, cachedData, setSelectedRecord } = useAppContext();
-  const [basket, setBasket] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { playSoundEffect, setActiveTab, setCachedData, cachedData, setSelectedRecord, basket } = useAppContext();
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!currentUser?.firebaseCode) return;
-
-    setLoading(true);
-    const q = query(
-      collection(db, "applications"),
-      where("processedBy", "==", currentUser.firebaseCode),
-      where("status", "==", "Pending")
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const items = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      
-      // Auto-cleanup items already in system
-      items.forEach(async (item: any) => {
-          const inSystem = cachedData?.some(c => c.cidb === item.cidb);
-          if (inSystem) {
-              await deleteDoc(doc(db, "applications", item.id));
-          }
-      });
-
-      setBasket(items.sort((a: any, b: any) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
-      setLoading(false);
+    // Auto-cleanup items already in system
+    basket.forEach(async (item: any) => {
+        const inSystem = cachedData?.some(c => c.cidb === item.cidb);
+        if (inSystem) {
+            try {
+                await deleteDoc(doc(db, "applications", item.id));
+            } catch (e) { console.error(e); }
+        }
     });
-
-    return () => unsubscribe();
-  }, [currentUser, cachedData]);
+  }, [basket, cachedData]);
 
   const removeDoc = async (id: string) => {
     if (window.confirm("Padam dari bakul?")) {
@@ -122,16 +102,36 @@ export const BakulPermohonan: React.FC = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-            {basket.map(item => (
-                <div key={item.id} className="bg-white rounded-[2.5rem] p-8 border border-slate-200 shadow-sm hover:shadow-xl hover:shadow-blue-100/50 transition-all duration-500 group flex flex-col border-b-[6px] border-b-blue-600">
-                    <div className="flex justify-between items-start mb-6">
-                        <div className="bg-blue-100 text-blue-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter">
-                            {item.grade} • {item.type}
+            {basket.map(item => {
+                const typeColors: any = {
+                    'BARU': 'border-b-blue-600 shadow-blue-50',
+                    'PEMBAHARUAN': 'border-b-emerald-600 shadow-emerald-50',
+                    'UBAH MAKLUMAT': 'border-b-amber-500 shadow-amber-50',
+                    'UBAH GRED': 'border-b-purple-600 shadow-purple-50'
+                };
+                const tagColors: any = {
+                    'BARU': 'bg-blue-100 text-blue-600',
+                    'PEMBAHARUAN': 'bg-emerald-100 text-emerald-600',
+                    'UBAH MAKLUMAT': 'bg-amber-100 text-amber-700',
+                    'UBAH GRED': 'bg-purple-100 text-purple-600'
+                };
+
+                return (
+                    <div key={item.id} className={cn(
+                        "bg-white rounded-[2.5rem] p-8 border border-slate-200 shadow-sm hover:shadow-xl transition-all duration-500 group flex flex-col border-b-[6px]",
+                        typeColors[item.type] || 'border-b-slate-600 shadow-slate-50'
+                    )}>
+                        <div className="flex justify-between items-start mb-6">
+                            <div className={cn(
+                                "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter",
+                                tagColors[item.type] || 'bg-slate-100 text-slate-600'
+                            )}>
+                                {item.grade} • {item.type}
+                            </div>
+                            <button onClick={() => removeDoc(item.id)} className="text-slate-300 hover:text-red-500 transition-colors">
+                                <Trash2 size={18} />
+                            </button>
                         </div>
-                        <button onClick={() => removeDoc(item.id)} className="text-slate-300 hover:text-red-500 transition-colors">
-                            <Trash2 size={18} />
-                        </button>
-                    </div>
 
                     <h3 className="text-xl font-black text-slate-800 leading-tight mb-2 group-hover:text-blue-600 transition-colors uppercase truncate">
                         {item.company}
@@ -156,7 +156,7 @@ export const BakulPermohonan: React.FC = () => {
                         <PlayCircle size={18} /> PROSES PERMOHONAN
                     </button>
                 </div>
-            ))}
+            )})}
         </div>
       )}
     </div>

@@ -7,6 +7,8 @@ interface AppContextType {
   setActiveTab: (tab: string) => void;
   cachedData: any[];
   dashboardData: any;
+  basket: any[];
+  basketIds: Set<string>;
   selectedRecord: any | null;
   setSelectedRecord: (record: any | null) => void;
   setCachedData: (data: any[]) => void;
@@ -24,6 +26,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const { currentUser } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedRecord, setSelectedRecord] = useState<any | null>(null);
+  const [basket, setBasket] = useState<any[]>([]);
+  const [basketIds, setBasketIds] = useState<Set<string>>(new Set());
   const [cachedData, setCachedState] = useState<any[]>(() => {
     const stored = localStorage.getItem('stb_data_cache');
     return stored ? JSON.parse(stored) : [];
@@ -42,6 +46,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const stored = localStorage.getItem('stb_sfx_volume');
     return stored ? parseFloat(stored) : 0.7;
   });
+
+  // Basket Sync
+  useEffect(() => {
+    if (!currentUser?.firebaseCode) {
+        setBasket([]);
+        setBasketIds(new Set());
+        return;
+    }
+
+    const { collection, query, where, onSnapshot } = require('firebase/firestore');
+    const { db } = require('../services/firebaseService');
+
+    const q = query(
+        collection(db, "applications"),
+        where("processedBy", "==", currentUser.firebaseCode),
+        where("status", "==", "Pending")
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot: any) => {
+        const items = snapshot.docs.map((doc: any) => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+        setBasket(items);
+        setBasketIds(new Set(items.map((i: any) => i.cidb)));
+    });
+
+    return () => unsubscribe();
+  }, [currentUser]);
 
   const setCachedData = useCallback((data: any[]) => {
     setCachedState(data);
@@ -129,6 +162,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setActiveTab,
         cachedData, 
         dashboardData,
+        basket,
+        basketIds,
         selectedRecord,
         setSelectedRecord,
         setCachedData, 

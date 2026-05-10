@@ -8,7 +8,8 @@ import {
   ShoppingCart, 
   CheckCircle2, 
   MapPin,
-  Tag
+  Tag,
+  Activity
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { db } from '../services/firebaseService';
@@ -31,7 +32,7 @@ interface ExcelItem {
 
 export const TapisanExcel: React.FC = () => {
   const { currentUser } = useAuth();
-  const { playSoundEffect, cachedData, setActiveTab } = useAppContext();
+  const { playSoundEffect, cachedData, setActiveTab, basketIds } = useAppContext();
   const [rawData, setRawData] = useState<ExcelItem[]>([]);
   const [districts, setDistricts] = useState<string[]>([]);
   const [selectedDistricts, setSelectedDistricts] = useState<Set<string>>(new Set());
@@ -56,13 +57,18 @@ export const TapisanExcel: React.FC = () => {
     if (data.length < 2) return;
     const headers = data[0].map(h => String(h).toLowerCase().trim());
     
+    // Robust Header Detection using Regex
+    const findHeader = (patterns: RegExp[]) => {
+        return headers.findIndex(h => patterns.some(p => p.test(h)));
+    };
+
     const keys = {
-      company: headers.findIndex(h => h.includes('syarikat') || h.includes('company') || h.includes('nama')),
-      grade: headers.findIndex(h => h.includes('gred') || h.includes('grade')),
-      cidb: headers.findIndex(h => h.includes('cidb') || h.includes('reg')),
-      district: headers.findIndex(h => h.includes('daerah') || h.includes('district') || h.includes('negeri')),
-      date: headers.findIndex(h => h.includes('tarikh') || h.includes('date') || h.includes('submitted')),
-      updateType: headers.findIndex(h => h.includes('update type') || h.includes('jenis perubahan'))
+      company: findHeader([/syarikat/i, /company/i, /nama/i]),
+      grade: findHeader([/gred/i, /grade/i]),
+      cidb: findHeader([/cidb/i, /reg/i, /no.*pendaftaran/i]),
+      district: findHeader([/daerah/i, /district/i, /negeri/i, /kawasan/i]),
+      date: findHeader([/tarikh/i, /date/i, /submitted/i, /mohon/i]),
+      updateType: findHeader([/update type/i, /jenis perubahan/i, /jenis.*mohon/i])
     };
 
     const gradeRegex = /^G[4-7]/i;
@@ -260,10 +266,22 @@ export const TapisanExcel: React.FC = () => {
                 <FileSpreadsheet size={32} />
             </div>
             <div>
-                <h1 className="text-3xl font-black text-slate-800 tracking-tight">TAPISAN EXCEL</h1>
-                <p className="text-slate-500 font-medium">Muat naik fail Excel CIDB untuk menapis permohonan</p>
+                <h1 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-3">TAPISAN EXCEL <div className="px-2 py-1 bg-emerald-100 text-emerald-600 rounded-lg text-[10px] font-black tracking-widest uppercase">Smart Tapis v3</div></h1>
+                <p className="text-slate-500 font-medium text-sm">Automasi Penapisan Syarikat G4-G7 & Agihan CIDB</p>
             </div>
         </div>
+        
+        {rawData.length > 0 && (
+            <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-2xl flex items-center gap-4">
+                <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-emerald-600 shadow-sm">
+                    <Activity size={20} />
+                </div>
+                <div>
+                    <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest leading-none mb-1">Logik Agihan Aktif</p>
+                    <p className="text-xs font-bold text-emerald-800">Carian: Akhiran CIDB & Alpha-Split (A-M)</p>
+                </div>
+            </div>
+        )}
       </header>
 
       <section className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm text-center border-dashed border-2 border-slate-200">
@@ -343,13 +361,17 @@ export const TapisanExcel: React.FC = () => {
                     </thead>
                     <tbody className="divide-y text-sm">
                         {filteredData.map(item => {
-                            const inDb = cachedData.some(c => c.cidb === item.cidb);
+                            const inDb = cachedData.find(c => c.cidb === item.cidb);
+                            const hasDecision = inDb && (inDb.kelulusan || inDb.borang_syor_pengesyor);
+                            const inBakul = basketIds.has(item.cidb);
+                            const isDisabled = inDb || inBakul;
+
                             return (
-                                <tr key={item.id} className={cn("hover:bg-blue-50/50 transition-colors", inDb && "opacity-50 grayscale bg-slate-50")}>
+                                <tr key={item.id} className={cn("hover:bg-blue-50/50 transition-all duration-300", isDisabled && "opacity-50 grayscale bg-slate-50")}>
                                     <td className="px-8 py-4">
                                         <input 
                                             type="checkbox" 
-                                            disabled={inDb}
+                                            disabled={isDisabled}
                                             checked={selectedItems.has(item.id)} 
                                             onChange={() => {
                                                 const newSet = new Set(selectedItems);
@@ -366,7 +388,7 @@ export const TapisanExcel: React.FC = () => {
                                     <td className="px-4 py-4">
                                         <div className="flex flex-col gap-1">
                                             <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-black w-fit">{item.grade}</span>
-                                            <span className="text-[10px] font-black text-blue-600">{item.updateType}</span>
+                                            <span className="text-[10px] font-black text-blue-600 uppercase tracking-tighter">{item.updateType}</span>
                                         </div>
                                     </td>
                                     <td className="px-4 py-4">
@@ -377,9 +399,17 @@ export const TapisanExcel: React.FC = () => {
                                     </td>
                                     <td className="px-4 py-4 font-bold text-slate-400 uppercase tracking-tighter">{item.dateSubmitted}</td>
                                     <td className="px-4 py-4 text-center">
-                                        {inDb ? (
+                                        {hasDecision ? (
                                             <span className="inline-flex items-center gap-1 bg-green-100 text-green-700 px-3 py-1 rounded-full text-[10px] font-black uppercase">
                                                 <CheckCircle2 size={12} /> TELAH ADA
+                                            </span>
+                                        ) : inDb ? (
+                                            <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-[10px] font-black uppercase">
+                                                <Tag size={12} /> BELUM HANTAR
+                                            </span>
+                                        ) : inBakul ? (
+                                            <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-[10px] font-black uppercase">
+                                                <ShoppingCart size={12} /> DALAM BAKUL
                                             </span>
                                         ) : (
                                             <span className="bg-slate-100 text-slate-400 px-3 py-1 rounded-full text-[10px] font-black uppercase">BARU</span>

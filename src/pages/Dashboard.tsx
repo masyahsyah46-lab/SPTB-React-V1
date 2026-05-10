@@ -48,7 +48,7 @@ ChartJS.register(
 
 // PENTING: Custom breathing plugin from original app.js
 const alivePlugin: Plugin = {
-  id: 'alivePlugin',
+  id: 'alive',
   beforeDraw: (chart) => {
     // @ts-ignore - access custom option
     if (chart.options.plugins?.alive?.enabled) {
@@ -65,11 +65,6 @@ const alivePlugin: Plugin = {
     // @ts-ignore - access custom option
     if (chart.options.plugins?.alive?.enabled) {
       chart.ctx.restore();
-      window.requestAnimationFrame(() => {
-        if (chart && chart.canvas) {
-          chart.render();
-        }
-      });
     }
   }
 };
@@ -95,24 +90,33 @@ export const Dashboard: React.FC = () => {
   };
 
   const stats = useMemo(() => {
-    // In a real app, this would be computed from cachedData or fetched
+    // Penapisan berdasarkan tempoh
+    const now = new Date();
+    const filtered = cachedData.filter(item => {
+        if (!item.tarikh_mohon) return true;
+        const d = new Date(item.tarikh_mohon);
+        if (filter.period === 'monthly' && d.getMonth() + 1 !== filter.month) return false;
+        if (filter.period === 'yearly' && d.getFullYear() !== filter.year) return false;
+        return true;
+    });
+
     return {
-      total: cachedData.length,
-      lulus: cachedData.filter(i => (i.kelulusan || '').includes('LULUS') || (i.kelulusan || '').includes('SOKONG')).length,
-      tolak: cachedData.filter(i => (i.kelulusan || '').includes('TOLAK') || (i.kelulusan || '').includes('SIASAT')).length,
-      proses: cachedData.filter(i => !(i.kelulusan || '').includes('LULUS') && !(i.kelulusan || '').includes('TOLAK') && !(i.kelulusan || '').includes('SIASAT')).length,
-      typeStats: cachedData.reduce((acc: any, item) => {
-        const type = (item.jenis || 'LAIN-LAIN').toUpperCase();
+      total: filtered.length,
+      lulus: filtered.filter(i => (i.kelulusan || '').includes('LULUS') || (i.kelulusan || '').includes('SOKONG')).length,
+      tolak: filtered.filter(i => (i.kelulusan || '').includes('TOLAK') || (i.kelulusan || '').includes('SIASAT') || (i.kelulusan || '').includes('TIDAK DISOKONG')).length,
+      proses: filtered.filter(i => !(i.kelulusan || '').includes('LULUS') && !(i.kelulusan || '').includes('SOKONG') && !(i.kelulusan || '').includes('TOLAK') && !(i.kelulusan || '').includes('SIASAT') && !(i.kelulusan || '').includes('TIDAK DISOKONG')).length,
+      typeStats: filtered.reduce((acc: any, item) => {
+        const type = (item.jenis || 'baru').toUpperCase();
         acc[type] = (acc[type] || 0) + 1;
         return acc;
       }, {}),
-      consultationStats: cachedData.reduce((acc: any, item) => {
+      consultationStats: filtered.reduce((acc: any, item) => {
         const platform = (item.db_konsultansi_platform || 'EMEL').toUpperCase();
         acc[platform] = (acc[platform] || 0) + 1;
         return acc;
       }, { 'EMEL': 0, 'WHATSAPP': 0, 'PANGGILAN': 0 })
     };
-  }, [cachedData]);
+  }, [cachedData, filter]);
 
   const consultationChartData = useMemo(() => ({
     labels: Object.keys(stats.consultationStats),
@@ -128,7 +132,7 @@ export const Dashboard: React.FC = () => {
     labels: currentUser?.role === 'PENGESYOR' ? ['SOKONG', 'TIDAK SOKONG', 'PROSES'] : ['LULUS', 'TOLAK/SIASAT', 'PROSES'],
     datasets: [{
       data: [stats.lulus, stats.tolak, stats.proses],
-      backgroundColor: ['#22c55e', '#ef4444', '#f59e0b'],
+      backgroundColor: ['#10b981', '#ef4444', '#f59e0b'], // Biru/Hijau/Merah thematic
       borderWidth: 3,
       borderColor: '#ffffff',
       hoverOffset: 15,
@@ -143,7 +147,7 @@ export const Dashboard: React.FC = () => {
       labels,
       datasets: [{
         data,
-        backgroundColor: COLORS,
+        backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444'], // Biru, Hijau, Kuning, Merah
         borderWidth: 3,
         borderColor: '#ffffff',
         hoverOffset: 15,
@@ -167,25 +171,28 @@ export const Dashboard: React.FC = () => {
   };
 
   const downloadCSV = () => {
-    const csvRows = [
-      ['Syarikat', 'CIDB', 'Gred', 'Jenis', 'Status'],
-      ...cachedData.map(item => [
-        item.syarikat,
-        item.cidb,
-        item.gred,
-        item.jenis,
-        item.kelulusan || 'DALAM PROSES'
-      ])
-    ];
+    setLoading(true);
+    setTimeout(() => {
+        const headers = ['Syarikat', 'CIDB', 'Gred', 'Jenis', 'Status'];
+        const rows = cachedData.map(item => [
+            item.syarikat,
+            item.cidb,
+            item.gred,
+            item.jenis,
+            item.kelulusan || 'DALAM PROSES'
+        ]);
 
-    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + csvRows.map(e => e.join(",")).join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `dashboard_data_${filter.year}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+        const csvContent = "\uFEFF" + [headers, ...rows].map(e => e.join(",")).join("\n");
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `dashboard_data_${filter.year}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setLoading(false);
+    }, 800);
   };
 
   return (
